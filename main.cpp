@@ -1,9 +1,12 @@
 #include <algorithm>
 #include "tgaimage.h"
 #include <iostream>
+#include "model.h"
 
 const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red = TGAColor(255, 0, 0, 255);
+
+Model *model = NULL;
 
 void draw_line(int x0, int y0, int x1, int y1, TGAImage &image, TGAColor color)
 {
@@ -77,9 +80,38 @@ void draw_line(int x0, int y0, int x1, int y1, TGAImage &image, TGAColor color)
     }
 }
 
+int image_width = 1000;
+int image_height = 1000;
 int main(int argc, char **argv)
 {
-    TGAImage image(100, 100, TGAImage::RGB);
+    TGAImage image(image_width, image_height, TGAImage::RGB);
+    // lines(image);
+    model = new Model("./head.obj");
+    // For each face, draw all of its edges
+    for (int i = 0; i < model->nfaces(); i++)
+    {
+        std::vector<int> face = model->face(i);
+        // draw 3 edges, between vert j and vert j+1
+        for (int j = 0; j < 3; j++)
+        {
+            Vec3f v0 = model->vert(face[j]);
+            Vec3f v1 = model->vert(face[(j + 1) % 3]);
+            // obj file vertex values seem to lie between (-1, +1)
+            int x0 = (v0.x + 1.0) / 2.0 * image_width;
+            int y0 = (v0.y + 1.0) / 2.0 * image_height;
+            int x1 = (v1.x + 1.0) / 2.0 * image_width;
+            int y1 = (v1.y + 1.0) / 2.0 * image_height;
+            draw_line(x0, y0, x1, y1, image, white);
+        }
+    }
+
+    image.flip_vertically();
+    image.write_tga_file("output.tga");
+    return 0;
+}
+
+void lines(TGAImage &image)
+{
     image.set(52, 41, red);
     // normal line, is_steep
     draw_line(10, 10, 50, 50, image, white);
@@ -91,7 +123,4 @@ int main(int argc, char **argv)
     // vertical lines
     draw_line(60, 40, 60, 20, image, TGAColor(255, 100, 100, 255));
     draw_line(70, 20, 70, 40, image, TGAColor(255, 0, 0, 255));
-    image.flip_vertically();
-    image.write_tga_file("output.tga");
-    return 0;
 }
