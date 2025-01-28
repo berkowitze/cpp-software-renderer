@@ -1,3 +1,4 @@
 *.exe
 *.tga
 *.o
+.DS_Store
