@@ -80,12 +80,90 @@ void draw_line(int x0, int y0, int x1, int y1, TGAImage &image, TGAColor color)
     }
 }
 
-int image_width = 1000;
-int image_height = 1000;
+void triangle(Vec2i p0, Vec2i p1, Vec2i p2, TGAImage &image, TGAColor color)
+{
+    draw_line(p0.x, p0.y, p1.x, p1.y, image, color);
+    draw_line(p1.x, p1.y, p2.x, p2.y, image, color);
+    draw_line(p2.x, p2.y, p0.x, p0.y, image, color);
+
+    // First, sort p0, p1, p2 so that they are in order of increasing y
+    // p0 is the "lowest", p2 is the "highest"
+    if (p0.y > p1.y)
+    {
+        std::swap(p0, p1);
+    }
+    if (p1.y > p2.y)
+    {
+        std::swap(p1, p2);
+    }
+    if (p0.y > p1.y)
+    {
+        std::swap(p1, p2);
+    }
+
+    // Render the bottom half of the triangle
+    for (int y = p0.y; y < p1.y; y++)
+    {
+        // First, figure out where along the (p0, p1) edge we are
+        int dy_01 = (p1.y - p0.y);
+        float p01_t = dy_01 == 0 ? 1.0 : (y - p0.y) / (float)(p1.y - p0.y);
+        float p01_x = (p1.x - p0.x) * p01_t + p0.x;
+
+        // Same for (p0, p2) edge
+        int dy_02 = (p2.y - p0.y);
+        float p02_t = dy_02 == 0 ? 1.0 : (y - p0.y) / (float)(p2.y - p0.y);
+        float p02_x = (p2.x - p0.x) * p02_t + p0.x;
+
+        // Left boundary is the min of these 2 x's, right is the max
+        int left_boundary = std::min(p01_x, p02_x);
+        int right_boundary = std::max(p01_x, p02_x);
+        draw_line(left_boundary, y, right_boundary, y, image, color);
+    }
+
+    // Render the top half
+    for (int y = p1.y; y <= p2.y; y++)
+    {
+        // First, figure out where along the (p1, p2) edge we are
+        int dy_12 = (p2.y - p1.y);
+        float p12_t = dy_12 == 0 ? 1.0 : (y - p1.y) / (float)(p2.y - p1.y);
+        float p12_x = (p2.x - p1.x) * p12_t + p1.x;
+
+        // Same for (p0, p2) edge
+        int dy_02 = (p2.y - p0.y);
+        float p02_t = dy_02 == 0 ? 1.0 : (y - p0.y) / (float)(p2.y - p0.y);
+        float p02_x = (p2.x - p0.x) * p02_t + p0.x;
+
+        // Left boundary is the min of these 2 x's, right is the max
+        int left_boundary = std::min(p12_x, p02_x);
+        int right_boundary = std::max(p12_x, p02_x);
+        draw_line(left_boundary, y, right_boundary, y, image, color);
+    }
+}
+
+int image_width = 200;
+int image_height = 200;
 int main(int argc, char **argv)
 {
     TGAImage image(image_width, image_height, TGAImage::RGB);
     // lines(image);
+    // wireframe(image);
+
+    // Create a few triangles
+    Vec2i t0[3] = {Vec2i(10, 70), Vec2i(50, 160), Vec2i(70, 80)};
+    Vec2i t1[3] = {Vec2i(180, 50), Vec2i(150, 1), Vec2i(70, 180)};
+    Vec2i t2[3] = {Vec2i(180, 150), Vec2i(120, 160), Vec2i(130, 180)};
+
+    triangle(t0[0], t0[1], t0[2], image, white);
+    triangle(t1[0], t1[1], t1[2], image, TGAColor(255, 255, 0, 255));
+    triangle(t2[0], t2[1], t2[2], image, red);
+
+    image.flip_vertically();
+    image.write_tga_file("output.tga");
+    return 0;
+}
+
+void wireframe(TGAImage &image)
+{
     model = new Model("./head.obj");
     // For each face, draw all of its edges
     for (int i = 0; i < model->nfaces(); i++)
@@ -104,10 +182,6 @@ int main(int argc, char **argv)
             draw_line(x0, y0, x1, y1, image, white);
         }
     }
-
-    image.flip_vertically();
-    image.write_tga_file("output.tga");
-    return 0;
 }
 
 void lines(TGAImage &image)
