@@ -6,6 +6,9 @@
 const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red = TGAColor(255, 0, 0, 255);
 
+int image_width = 800;
+int image_height = 800;
+
 Model *model = NULL;
 
 void draw_line(int x0, int y0, int x1, int y1, TGAImage &image, TGAColor color)
@@ -242,20 +245,6 @@ void flat_model(TGAImage &image)
     }
 }
 
-int image_width = 800;
-int image_height = 800;
-int main(int argc, char **argv)
-{
-    TGAImage image(image_width, image_height, TGAImage::RGB);
-    // lines(image);
-    // wireframe(image);
-    // triangle_test(image)
-    flat_model(image);
-    image.flip_vertically();
-    image.write_tga_file("output.tga");
-    return 0;
-}
-
 void triangle_test(TGAImage &image)
 {
     // Create a few triangles
@@ -303,4 +292,15 @@ void lines(TGAImage &image)
     // vertical lines
     draw_line(60, 40, 60, 20, image, TGAColor(255, 100, 100, 255));
     draw_line(70, 20, 70, 40, image, TGAColor(255, 0, 0, 255));
+}
+int main(int argc, char **argv)
+{
+    TGAImage image(image_width, image_height, TGAImage::RGB);
+    // lines(image);
+    // wireframe(image);
+    // triangle_test(image);
+    flat_model(image);
+    image.flip_vertically();
+    image.write_tga_file("output.tga");
+    return 0;
 }
