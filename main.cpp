@@ -80,7 +80,8 @@ void draw_line(int x0, int y0, int x1, int y1, TGAImage &image, TGAColor color)
     }
 }
 
-void triangle(Vec2i p0, Vec2i p1, Vec2i p2, TGAImage &image, TGAColor color)
+/*
+void triangle_linesweep(Vec2i p0, Vec2i p1, Vec2i p2, TGAImage &image, TGAColor color)
 {
     draw_line(p0.x, p0.y, p1.x, p1.y, image, color);
     draw_line(p1.x, p1.y, p2.x, p2.y, image, color);
@@ -139,27 +140,132 @@ void triangle(Vec2i p0, Vec2i p1, Vec2i p2, TGAImage &image, TGAColor color)
         draw_line(left_boundary, y, right_boundary, y, image, color);
     }
 }
+*/
 
-int image_width = 200;
-int image_height = 200;
+TGAColor bbox_color(125, 125, 100, 255);
+
+void triangle(Vec2i p0, Vec2i p1, Vec2i p2, TGAImage &image, TGAColor color, bool show_bounding_box)
+{
+    draw_line(p0.x, p0.y, p1.x, p1.y, image, color);
+    draw_line(p1.x, p1.y, p2.x, p2.y, image, color);
+    draw_line(p2.x, p2.y, p0.x, p0.y, image, color);
+
+    Vec2i bbox_min;
+    Vec2i bbox_max;
+
+    bbox_min.x = std::max(0, std::min(p0.x, std::min(p1.x, p2.x)));
+    bbox_min.y = std::max(0, std::min(p0.y, std::min(p1.y, p2.y)));
+
+    bbox_max.x = std::min(image.get_width() - 1, std::max(p0.x, std::max(p1.x, p2.x)));
+    bbox_max.y = std::min(image.get_height() - 1, std::max(p0.y, std::max(p1.y, p2.y)));
+
+    if (show_bounding_box)
+    {
+        // draw bounding box for debugging
+        // left
+        draw_line(bbox_min.x, bbox_min.y, bbox_min.x, bbox_max.y, image, bbox_color);
+        // right
+        draw_line(bbox_max.x, bbox_min.y, bbox_max.x, bbox_max.y, image, bbox_color);
+        // top
+        draw_line(bbox_min.x, bbox_max.y, bbox_max.x, bbox_max.y, image, bbox_color);
+        // bottom
+        draw_line(bbox_min.x, bbox_min.y, bbox_max.x, bbox_min.y, image, bbox_color);
+    }
+
+    Vec2i P;
+    for (int x = bbox_min.x; x <= bbox_max.x; x++)
+    {
+        P.x = x;
+        for (int y = bbox_min.y; y <= bbox_max.y; y++)
+        {
+            P.y = y;
+            Vec3f u = Vec3f(
+                          p2.x - p0.x,
+                          p1.x - p0.x,
+                          p0.x - P.x) ^
+                      Vec3f(
+                          p2.y - p0.y,
+                          p1.y - p0.y,
+                          p0.y - P.y);
+            if (std::abs(u.z) < 1)
+            {
+                // degenerate triangle
+                continue;
+            }
+            Vec3f barycentric(
+                1.0f - (u.x + u.y) / u.z,
+                u.y / u.z,
+                u.x / u.z);
+            if (barycentric.x < 0 || barycentric.y < 0 || barycentric.z < 0)
+            {
+                // Not inside triangle
+                continue;
+            }
+            image.set(P.x, P.y, color);
+        }
+    }
+}
+
+void flat_model(TGAImage &image)
+{
+    model = new Model("./head.obj");
+    Vec3f light_dir(0.0, 0.0, -1.0);
+    light_dir.normalize();
+    for (int i = 0; i < model->nfaces(); i++)
+    {
+        std::vector<int> face = model->face(i);
+        Vec2i screen_coords[3]; // vertices of the triangle in screen coordinates
+        Vec3f world_coords[3];  // vertices of the triangle in world coordinates
+        for (int j = 0; j < 3; j++)
+        {
+            Vec3f world_coord = model->vert(face[j]);
+            screen_coords[j].x = (int)((world_coord.x + 1.0) / 2.0 * image.get_width());
+            screen_coords[j].y = (int)((world_coord.y + 1.0) / 2.0 * image.get_height());
+
+            world_coords[j] = world_coord;
+        }
+
+        Vec3f normal = (world_coords[2] - world_coords[0]) ^ (world_coords[1] - world_coords[0]);
+        normal.normalize();
+        float brightness = normal * light_dir;
+        if (brightness < 0)
+            continue;
+
+        // std::cout << color;
+        triangle(
+            screen_coords[0],
+            screen_coords[1],
+            screen_coords[2],
+            image,
+            TGAColor(brightness * 255, brightness * 255, brightness * 255, 255),
+            false);
+    }
+}
+
+int image_width = 800;
+int image_height = 800;
 int main(int argc, char **argv)
 {
     TGAImage image(image_width, image_height, TGAImage::RGB);
     // lines(image);
     // wireframe(image);
+    // triangle_test(image)
+    flat_model(image);
+    image.flip_vertically();
+    image.write_tga_file("output.tga");
+    return 0;
+}
 
+void triangle_test(TGAImage &image)
+{
     // Create a few triangles
     Vec2i t0[3] = {Vec2i(10, 70), Vec2i(50, 160), Vec2i(70, 80)};
     Vec2i t1[3] = {Vec2i(180, 50), Vec2i(150, 1), Vec2i(70, 180)};
     Vec2i t2[3] = {Vec2i(180, 150), Vec2i(120, 160), Vec2i(130, 180)};
 
-    triangle(t0[0], t0[1], t0[2], image, white);
-    triangle(t1[0], t1[1], t1[2], image, TGAColor(255, 255, 0, 255));
-    triangle(t2[0], t2[1], t2[2], image, red);
-
-    image.flip_vertically();
-    image.write_tga_file("output.tga");
-    return 0;
+    triangle(t0[0], t0[1], t0[2], image, white, true);
+    triangle(t1[0], t1[1], t1[2], image, TGAColor(255, 255, 0, 255), true);
+    triangle(t2[0], t2[1], t2[2], image, red, true);
 }
 
 void wireframe(TGAImage &image)

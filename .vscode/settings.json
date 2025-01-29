@@ -56,5 +56,6 @@
     "vector": "cpp",
     "algorithm": "cpp"
   },
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+  "C_Cpp.errorSquiggles": "enabled"
 }
