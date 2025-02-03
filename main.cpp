@@ -147,20 +147,22 @@ void triangle_linesweep(Vec2i p0, Vec2i p1, Vec2i p2, TGAImage &image, TGAColor 
 
 TGAColor bbox_color(125, 125, 100, 255);
 
-void triangle(Vec2i p0, Vec2i p1, Vec2i p2, TGAImage &image, TGAColor color, bool show_bounding_box)
+void triangle(
+    Vec3f p0, Vec3f p1, Vec3f p2, Vec2f uv0, Vec2f uv1, Vec2f uv2, float *zbuffer, TGAImage &image, TGAImage &texture, TGAColor color, bool show_bounding_box)
 {
-    draw_line(p0.x, p0.y, p1.x, p1.y, image, color);
-    draw_line(p1.x, p1.y, p2.x, p2.y, image, color);
-    draw_line(p2.x, p2.y, p0.x, p0.y, image, color);
+    // outline
+    // draw_line(p0.x, p0.y, p1.x, p1.y, image, color);
+    // draw_line(p1.x, p1.y, p2.x, p2.y, image, color);
+    // draw_line(p2.x, p2.y, p0.x, p0.y, image, color);
 
-    Vec2i bbox_min;
-    Vec2i bbox_max;
+    Vec2f bbox_min;
+    Vec2f bbox_max;
 
-    bbox_min.x = std::max(0, std::min(p0.x, std::min(p1.x, p2.x)));
-    bbox_min.y = std::max(0, std::min(p0.y, std::min(p1.y, p2.y)));
+    bbox_min.x = std::max(0.f, std::min(p0.x, std::min(p1.x, p2.x)));
+    bbox_min.y = std::max(0.f, std::min(p0.y, std::min(p1.y, p2.y)));
 
-    bbox_max.x = std::min(image.get_width() - 1, std::max(p0.x, std::max(p1.x, p2.x)));
-    bbox_max.y = std::min(image.get_height() - 1, std::max(p0.y, std::max(p1.y, p2.y)));
+    bbox_max.x = std::min(image.get_width() - 1.f, std::max(p0.x, std::max(p1.x, p2.x)));
+    bbox_max.y = std::min(image.get_height() - 1.f, std::max(p0.y, std::max(p1.y, p2.y)));
 
     if (show_bounding_box)
     {
@@ -175,7 +177,7 @@ void triangle(Vec2i p0, Vec2i p1, Vec2i p2, TGAImage &image, TGAColor color, boo
         draw_line(bbox_min.x, bbox_min.y, bbox_max.x, bbox_min.y, image, bbox_color);
     }
 
-    Vec2i P;
+    Vec3f P;
     for (int x = bbox_min.x; x <= bbox_max.x; x++)
     {
         P.x = x;
@@ -204,26 +206,50 @@ void triangle(Vec2i p0, Vec2i p1, Vec2i p2, TGAImage &image, TGAColor color, boo
                 // Not inside triangle
                 continue;
             }
+
+            // Calculate z based on linear combination of the barycentric coordinates
+            P.z = p0.z * barycentric.x + p1.z * barycentric.y + p2.z * barycentric.z;
+
+            float u_new = uv0.x * barycentric.x + uv1.x * barycentric.y + uv2.x * barycentric.z;
+            float v_new = uv0.y * barycentric.x + uv1.y * barycentric.y + uv2.y * barycentric.z;
+            TGAColor color = texture.get((int)(u_new * texture.get_width()), (int)((1.0 - v_new) * texture.get_height()));
+            if (zbuffer[(int)(P.x + P.y * image.get_width())] >= P.z)
+            {
+                continue;
+            }
             image.set(P.x, P.y, color);
+            zbuffer[(int)(P.x + P.y * image.get_width())] = P.z;
         }
     }
 }
 
-void flat_model(TGAImage &image)
+void flat_model(TGAImage &image, TGAImage &texture)
 {
+    float *zbuffer = new float[image_width * image_height];
+    for (int i = 0; i < image_width * image_height; i++)
+    {
+        zbuffer[i] = std::numeric_limits<int>::min();
+    }
     model = new Model("./head.obj");
+    std::cout << "model loaded" << std::endl;
     Vec3f light_dir(0.0, 0.0, -1.0);
     light_dir.normalize();
     for (int i = 0; i < model->nfaces(); i++)
     {
-        std::vector<int> face = model->face(i);
-        Vec2i screen_coords[3]; // vertices of the triangle in screen coordinates
+        std::vector<int> pos_indices = model->tri_indices(i);
+        std::vector<int> tex_indices = model->uv_indices(i);
+        Vec3f screen_coords[3]; // vertices of the triangle in screen coordinates
         Vec3f world_coords[3];  // vertices of the triangle in world coordinates
+        Vec2f uvs[3];
         for (int j = 0; j < 3; j++)
         {
-            Vec3f world_coord = model->vert(face[j]);
-            screen_coords[j].x = (int)((world_coord.x + 1.0) / 2.0 * image.get_width());
-            screen_coords[j].y = (int)((world_coord.y + 1.0) / 2.0 * image.get_height());
+            Vec3f world_coord = model->vert(pos_indices[j]);
+            screen_coords[j].x = ((world_coord.x + 1.0) / 2.0 * image.get_width());
+            screen_coords[j].y = ((world_coord.y + 1.0) / 2.0 * image.get_height());
+            screen_coords[j].z = world_coord.z;
+
+            Vec2f uv = model->uv(tex_indices[j]);
+            uvs[j] = uv;
 
             world_coords[j] = world_coord;
         }
@@ -239,23 +265,30 @@ void flat_model(TGAImage &image)
             screen_coords[0],
             screen_coords[1],
             screen_coords[2],
+            uvs[0],
+            uvs[1],
+            uvs[2],
+            zbuffer,
             image,
+            texture,
             TGAColor(brightness * 255, brightness * 255, brightness * 255, 255),
             false);
     }
 }
-
+/*
 void triangle_test(TGAImage &image)
 {
+    float *zbuffer = new float[image.get_width() * image.get_height()];
     // Create a few triangles
     Vec2i t0[3] = {Vec2i(10, 70), Vec2i(50, 160), Vec2i(70, 80)};
     Vec2i t1[3] = {Vec2i(180, 50), Vec2i(150, 1), Vec2i(70, 180)};
     Vec2i t2[3] = {Vec2i(180, 150), Vec2i(120, 160), Vec2i(130, 180)};
 
-    triangle(t0[0], t0[1], t0[2], image, white, true);
-    triangle(t1[0], t1[1], t1[2], image, TGAColor(255, 255, 0, 255), true);
-    triangle(t2[0], t2[1], t2[2], image, red, true);
+    triangle(t0[0], t0[1], t0[2], zbuffer, image, white, true);
+    triangle(t1[0], t1[1], t1[2], zbuffer, image, TGAColor(255, 255, 0, 255), true);
+    triangle(t2[0], t2[1], t2[2], zbuffer, image, red, true);
 }
+*/
 
 void wireframe(TGAImage &image)
 {
@@ -263,12 +296,12 @@ void wireframe(TGAImage &image)
     // For each face, draw all of its edges
     for (int i = 0; i < model->nfaces(); i++)
     {
-        std::vector<int> face = model->face(i);
+        std::vector<int> pos_indices = model->tri_indices(i);
         // draw 3 edges, between vert j and vert j+1
         for (int j = 0; j < 3; j++)
         {
-            Vec3f v0 = model->vert(face[j]);
-            Vec3f v1 = model->vert(face[(j + 1) % 3]);
+            Vec3f v0 = model->vert(pos_indices[j]);
+            Vec3f v1 = model->vert(pos_indices[(j + 1) % 3]);
             // obj file vertex values seem to lie between (-1, +1)
             int x0 = (v0.x + 1.0) / 2.0 * image_width;
             int y0 = (v0.y + 1.0) / 2.0 * image_height;
@@ -293,13 +326,21 @@ void lines(TGAImage &image)
     draw_line(60, 40, 60, 20, image, TGAColor(255, 100, 100, 255));
     draw_line(70, 20, 70, 40, image, TGAColor(255, 0, 0, 255));
 }
+
 int main(int argc, char **argv)
 {
+    TGAImage texture;
+    bool success = texture.read_tga_file("african_head_diffuse.tga");
+    if (!success)
+    {
+        std::cerr << "Failed to load texture" << std::endl;
+        return 1;
+    }
     TGAImage image(image_width, image_height, TGAImage::RGB);
     // lines(image);
     // wireframe(image);
     // triangle_test(image);
-    flat_model(image);
+    flat_model(image, texture);
     image.flip_vertically();
     image.write_tga_file("output.tga");
     return 0;
