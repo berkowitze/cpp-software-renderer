@@ -16,7 +16,11 @@ $(DESTDIR)$(TARGET): $(OBJECTS)
 $(OBJECTS): %.o: %.cpp
 	$(SYSCONF_LINK) -Wall $(CPPFLAGS) -c $(CFLAGS) $< -o $@
 
+run:
+	./$(DESTDIR)$(TARGET) > output.txt 2>&1
+	cat output.txt | tail -n1 | xargs open
+
+
 clean:
 	-rm -f $(OBJECTS)
 	-rm -f $(TARGET)
-	-rm -f *.tga

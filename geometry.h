@@ -83,4 +83,74 @@ std::ostream &operator<<(std::ostream &s, Vec3<t> &v)
   return s;
 }
 
+class Matrix
+{
+  std::vector<std::vector<float> > m;
+
+public:
+  int rows, cols;
+  Matrix(int r = 4, int c = 4)
+  {
+    for (int i = 0; i < r; i++)
+    {
+      std::vector<float> row;
+      for (int j = 0; j < c; j++)
+      {
+        row.push_back(0.0f);
+      }
+      m.push_back(row);
+    }
+    rows = r;
+    cols = c;
+  };
+
+  std::vector<float> &operator[](const int i)
+  {
+    return m[i];
+  }
+
+  static Matrix identity(int dim)
+  {
+    Matrix identity_matrix(dim, dim);
+    for (int i = 0; i < dim; i++)
+    {
+      identity_matrix[i][i] = 1.0f;
+    }
+    return identity_matrix;
+  }
+
+  Matrix operator*(const Matrix &A)
+  {
+    Matrix result(rows, A.cols);
+    for (int i = 0; i < A.cols; i++)
+    {
+      for (int j = 0; j < rows; j++)
+      {
+        float value = 0;
+        for (int k = 0; k < A.rows; k++)
+        {
+          value += A.m[k][i] * m[j][k];
+        }
+        result.m[j][i] = value;
+      }
+    }
+    return result;
+  }
+
+  Matrix transpose()
+  {
+    Matrix result(cols, rows);
+    for (int i = 0; i < rows; i++)
+    {
+      for (int j = 0; j < cols; j++)
+      {
+        result.m[j][i] = m[i][j];
+      }
+    }
+    return result;
+  }
+
+  friend std::ostream &operator<<(std::ostream &s, Matrix &m);
+};
+
 #endif //__GEOMETRY_H__

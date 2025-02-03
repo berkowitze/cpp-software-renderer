@@ -1,0 +1,4 @@
+1024x1024/24
+#vertices: 1258, #tris 2492
+model loaded
+out/output_1738619346.tga

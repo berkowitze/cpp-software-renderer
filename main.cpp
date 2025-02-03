@@ -11,6 +11,23 @@ int image_height = 800;
 
 Model *model = NULL;
 
+Matrix vector_to_matrix(Vec3f v)
+{
+    Matrix m(4, 1);
+    m[0][0] = v.x;
+    m[1][0] = v.y;
+    m[2][0] = v.z;
+    m[3][0] = 1.0f;
+    return m;
+}
+
+Vec3f matrix_to_vector(Matrix m)
+{
+    // Assumes 4x1 matrix representing (x, y, z, w)
+    // Return vector that is x/y/z divided by w
+    return Vec3f(m[0][0] / m[3][0], m[1][0] / m[3][0], m[2][0] / m[3][0]);
+}
+
 void draw_line(int x0, int y0, int x1, int y1, TGAImage &image, TGAColor color)
 {
     // The line is "steep" if it changes more in y than in x
@@ -223,8 +240,37 @@ void triangle(
     }
 }
 
+const int depth = 255;
+
+Matrix viewport(int x, int y, int w, int h)
+{
+    /*
+
+    Viewport matrix:
+    | w/2 0  0  x+w/2 |
+    | 0  h/2 0  y+h/2 |
+    | 0  0  d/2 d/2   |
+    | 0  0  0   1     |
+
+    */
+    Matrix m = Matrix::identity(4);
+    m[0][3] = x + w / 2.0f;
+    m[1][3] = y + h / 2.0f;
+    m[2][3] = depth / 2.0f;
+
+    m[0][0] = w / 2.0f;
+    m[1][1] = h / 2.0f;
+    m[2][2] = depth / 2.0f;
+    return m;
+}
+
+const Vec3f camera(0, 0, 3);
+
 void flat_model(TGAImage &image, TGAImage &texture)
 {
+    Matrix Projection = Matrix::identity(4);
+    Projection[3][2] = -1.f / camera.z;
+
     float *zbuffer = new float[image_width * image_height];
     for (int i = 0; i < image_width * image_height; i++)
     {
@@ -234,6 +280,7 @@ void flat_model(TGAImage &image, TGAImage &texture)
     std::cout << "model loaded" << std::endl;
     Vec3f light_dir(0.0, 0.0, -1.0);
     light_dir.normalize();
+    Matrix Viewport = viewport(image.get_width() / 8.0f, image.get_height() / 8.0f, image.get_width() * 3.0f / 4.0f, image.get_height() * 3.0 / 4.0f);
     for (int i = 0; i < model->nfaces(); i++)
     {
         std::vector<int> pos_indices = model->tri_indices(i);
@@ -244,15 +291,29 @@ void flat_model(TGAImage &image, TGAImage &texture)
         for (int j = 0; j < 3; j++)
         {
             Vec3f world_coord = model->vert(pos_indices[j]);
-            screen_coords[j].x = ((world_coord.x + 1.0) / 2.0 * image.get_width());
-            screen_coords[j].y = ((world_coord.y + 1.0) / 2.0 * image.get_height());
-            screen_coords[j].z = world_coord.z;
+            // float z = original_world_coord.z;
+            // float denom = -1.0f / (z - camera.z);
+
+            // Vec3f world_coord(
+            //     original_world_coord.x,
+            //     original_world_coord.y,
+            //     original_world_coord.z);
+
+            // screen_coords[j].x = ((world_coord.x + 1.0) / 2.0 * image.get_width());
+            // screen_coords[j].y = ((world_coord.y + 1.0) / 2.0 * image.get_height());
+            // screen_coords[j].z = world_coord.z;
+            screen_coords[j] = matrix_to_vector(Viewport * Projection * vector_to_matrix(world_coord));
 
             Vec2f uv = model->uv(tex_indices[j]);
             uvs[j] = uv;
 
             world_coords[j] = world_coord;
         }
+
+        std::cout << Viewport << std::endl;
+        std::cout << Projection << std::endl;
+        std::cout << screen_coords[0] << std::endl;
+        std::cout << world_coords << std::endl;
 
         Vec3f normal = (world_coords[2] - world_coords[0]) ^ (world_coords[1] - world_coords[0]);
         normal.normalize();
@@ -275,20 +336,23 @@ void flat_model(TGAImage &image, TGAImage &texture)
             false);
     }
 }
-/*
-void triangle_test(TGAImage &image)
-{
-    float *zbuffer = new float[image.get_width() * image.get_height()];
-    // Create a few triangles
-    Vec2i t0[3] = {Vec2i(10, 70), Vec2i(50, 160), Vec2i(70, 80)};
-    Vec2i t1[3] = {Vec2i(180, 50), Vec2i(150, 1), Vec2i(70, 180)};
-    Vec2i t2[3] = {Vec2i(180, 150), Vec2i(120, 160), Vec2i(130, 180)};
 
-    triangle(t0[0], t0[1], t0[2], zbuffer, image, white, true);
-    triangle(t1[0], t1[1], t1[2], zbuffer, image, TGAColor(255, 255, 0, 255), true);
-    triangle(t2[0], t2[1], t2[2], zbuffer, image, red, true);
-}
-*/
+// void triangle_test(TGAImage &image)
+// {
+//     float *zbuffer = new float[image.get_width() * image.get_height()];
+//     // Create a few triangles
+//     Vec2i t0[3] = {Vec2i(10, 70), Vec2i(50, 160), Vec2i(70, 80)};
+//     Vec2i t1[3] = {Vec2i(180, 50), Vec2i(150, 1), Vec2i(70, 180)};
+//     Vec2i t2[3] = {Vec2i(180, 150), Vec2i(120, 160), Vec2i(130, 180)};
+
+//     triangle(t0[0], t0[1], t0[2], zbuffer, image, white, true);
+//     triangle(t1[0], t1[1], t1[2], zbuffer, image, TGAColor(255, 255, 0, 255), true);
+//     triangle(t2[0], t2[1], t2[2], zbuffer, image, red, true);
+
+//     triangle(
+//         Vec2i(10, 70), Vec2i(50, 160), Vec2i(70, 80),
+//         image, white);
+// }
 
 void wireframe(TGAImage &image)
 {
@@ -316,7 +380,9 @@ void lines(TGAImage &image)
 {
     image.set(52, 41, red);
     // normal line, is_steep
+
     draw_line(10, 10, 50, 50, image, white);
+
     // normal line, !is_steep
     draw_line(10, 50, 40, 70, image, TGAColor(255, 255, 0, 255));
     // horizontal lines
@@ -327,8 +393,42 @@ void lines(TGAImage &image)
     draw_line(70, 20, 70, 40, image, TGAColor(255, 0, 0, 255));
 }
 
+void matrix_test()
+{
+    Matrix x(4, 3);
+    x[0][1] = 4.0f;
+    x[1][1] = 5.0f;
+    x[2][1] = 3.0f;
+    x[0][2] = 1.0f;
+    x[1][2] = 2.0f;
+    x[2][2] = 3.0f;
+    std::cout << x << std::endl;
+
+    Matrix y(3, 5);
+    y[0][1] = -1.0f;
+    y[2][4] = 5.0f;
+    y[0][2] = 2.0f;
+    y[1][1] = 3.0f;
+    y[2][3] = 4.0f;
+    y[2][4] = 5.0f;
+    y[2][2] = 6.0f;
+    std::cout << y << std::endl;
+    std::cout << "Multiplying " << x.rows << "x" << x.cols << " and " << y.rows << "x" << y.cols << " matrices" << std::endl;
+    Matrix z = x * y;
+    std::cout << "=" << std::endl;
+    std::cout << z << std::endl;
+    std::cout << "Transposing " << x.rows << "x" << x.cols << " matrix" << std::endl;
+    Matrix x_t = x.transpose();
+    std::cout << x_t << std::endl;
+    std::cout << "Transposing " << y.rows << "x" << y.cols << " matrix" << std::endl;
+    Matrix y_t = y.transpose();
+    std::cout << y_t << std::endl;
+}
+
 int main(int argc, char **argv)
 {
+    // matrix_test();
+    // return 0;
     TGAImage texture;
     bool success = texture.read_tga_file("african_head_diffuse.tga");
     if (!success)
@@ -342,6 +442,8 @@ int main(int argc, char **argv)
     // triangle_test(image);
     flat_model(image, texture);
     image.flip_vertically();
-    image.write_tga_file("output.tga");
+    // write to a file called out/output_<current_date_time>.tga
+    image.write_tga_file(("out/output_" + std::to_string(std::time(0)) + ".tga").c_str());
+    std::cout << "out/output_" << std::to_string(std::time(0)) << ".tga";
     return 0;
 }
